@@ -1,0 +1,149 @@
+### Summary
+Updates the GitHub Actions CI workflow to conditionally capture and upload `nosetests.xml` test report artifacts only when test runs fail, optimizing storage and reducing noise in successful builds.
+
+### Changes Proposed
+- **Conditional CI Step:** Configured the artifact upload step (using `if: failure()`) so `nosetests.xml` is archived exclusively upon test step failures.
+- **Artifact Optimization:** Prevents unnecessary storage consumption and clutter by skipping artifact creation when all tests pass.
+- **Debugging Support:** Ensures detailed test failure XML reports are readily available for download and analysis when a regression occurs.
+
+### Testing & Verification
+- [ ] Verified that successful test runs skip the artifact upload step correctly.
+- [ ] Simulated a test failure to confirm `nosetests.xml` is successfully generated, archived, and accessible in the workflow run summary.
+
+### Breaking Changes
+- [x] None
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+uv.lock # (Optional if using uv)
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+
+# Environment variables & local secrets
+.env
+.env.local
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS metadata
+.DS_Store
+Thumbs.db
+pip-delete-this-directory.txtpackage com.renter.budgeting.ui
+
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.renter.budgeting.data.BudgetItemEntity
+import com.renter.budgeting.data.RentBudgetDatabase
+import com.renter.budgeting.data.RentBudgetRepository
+import com.renter.budgeting.data.RentPaymentEntity
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import java.util.Calendar
+
+class RentBudgetViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val repository: RentBudgetRepository
+
+    init {
+        val database = RentBudgetDatabase.getDatabase(application)
+        repository = RentBudgetRepository(database)
+    }
+
+    // Current selected year and month key state (e.g., for 2026 and "2026-10")
+    val currentYear: Int = Calendar.getInstance().get(Calendar.YEAR)
+    val currentMonthKey: String = "2026-10" // Can be dynamically calculated or passed
+
+    // Reactive StateFlow for Rent Payments of the current year
+    val rentPayments: StateFlow<List<RentPaymentEntity>> = repository
+        .getRentLogForYear(currentYear)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    // Reactive StateFlow for Budget Items of the current month
+    val budgetItems: StateFlow<List<BudgetItemEntity>> = repository
+        .getBudgetItems(currentMonthKey)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    // --- Actions ---
+
+    fun saveRentPayment(payment: RentPaymentEntity) {
+        viewModelScope.launch {
+            repository.saveRentPayment(payment)
+        }
+    }
+
+    fun deleteRentPayment(payment: RentPaymentEntity) {
+        viewModelScope.launch {
+            repository.deleteRentPayment(payment)
+        }
+    }
+
+    fun updateBudgetItem(item: BudgetItemEntity) {
+        viewModelScope.launch {
+            repository.updateBudgetItem(item)
+        }
+    }
+
+    fun seedDefaultTemplate(rentAmount: Double) {
+        viewModelScope.launch {
+            repository.seedDefaultBudgetTemplate(currentMonthKey, rentAmount)
+        }
+    }
+}
